@@ -216,7 +216,7 @@ module.exports = {
         responseArray.push([key, response.rates[key][curr]])
       };
       let sortedData = responseArray.sort((a, b) => {
-        return +a[0].slice(-2) - +b[0].slice(-2);
+        return new Date(a[0]) - new Date(b[0]);
       });
 
       let labels = [];
