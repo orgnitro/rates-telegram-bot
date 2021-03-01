@@ -4,13 +4,17 @@ if (process.env.NODE_ENV !== 'production') {
 
 const sqlite3 = require('sqlite3').verbose();
 const express = require('express');
-const { Composer } = require('micro-bot');
+const { Telegraf } = require('telegraf');
 const commands = require('./commands');
 const commandParts = require('./commandParts');
 const app = express();
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const bot = new Composer;
-// const bot = new Telegraf(BOT_TOKEN);
+const PORT = process.env.PORT || 3000;
+const URL = process.env.URL || 'https://rates-telegram-bot.herokuapp.com';
+const bot = new Telegraf(BOT_TOKEN);
+
+bot.telegram.setWebhook(`${URL}/bot${BOT_TOKEN}`);
+app.use(bot.webhookCallback(`/bot${BOT_TOKEN}`));
 
 bot.use(commandParts);
 
@@ -50,10 +54,8 @@ db.close((err) => {
 
 // Server creation
 
-// bot.launch();
-module.exports = bot;
+bot.launch();
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`Server started at port ${port}`);
+app.listen(PORT, () => {
+  console.log('Server started at port 3000');
 });

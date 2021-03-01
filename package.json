@@ -4,7 +4,7 @@
   "description": "",
   "main": "script.js",
   "scripts": {
-    "start": "micro-bot"
+    "start": "node script.js"
   },
   "keywords": [],
   "author": "",
@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "express": "^4.17.1",
-    "micro-bot": "^2.5.3",
+
+    "telegraf": "^4.1.1",
     "node-fetch": "^2.6.1",
     "quickchart-js": "^1.0.6",
     "sqlite3": "^5.0.2"
