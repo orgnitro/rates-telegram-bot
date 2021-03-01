@@ -65,24 +65,34 @@ module.exports = {
 
   list: function(ctx) {
     const db = openDB();
+    // Search rates in database 
     new Promise((resolve) => {
-      db.get(`SELECT lastRequest FROM rates WHERE lastRequest != 0`, (err, row) => resolve(row))
+      db.get(`
+      SELECT lastRequest 
+      FROM rates 
+      WHERE lastRequest != 0`, (err, row) => resolve(row))
     })
       .then(res => {
         if (!res || (Date.now() - res.lastRequest > 6e5)) {
+      // If nothing was found or information is outdated, then make http request 
           return new Promise((resolve) => resolve(fetchRatesWithBaseUSD()))
         }
       })
       .then((serverData) => {
         let response = 'Exchange rate relative to USD:\n\n';
         if (serverData) {
+          // Server data handling 
           for (let [currency, rate] of Object.entries(serverData.rates)) {
             response += `${currency}: ${rate.toFixed(2)}\n`
           }
           return response;
         } else {
+          // DB data handling 
           return new Promise(resolve => {
-            db.all(`SELECT currency, rate FROM rates WHERE currency != 0`, (err, row) => {
+            db.all(`
+            SELECT currency, rate 
+            FROM rates 
+            WHERE currency != 0`, (err, row) => {
               row.forEach((item) => {
                 response += `${item.currency}: ${item.rate.toFixed(2)}\n`;
               })
@@ -98,24 +108,31 @@ module.exports = {
   },
 
   exchange: function(ctx) {
-    const [amount, curr1, to, curr2] = ctx.state.command.splitArgs;
-    if (isNaN(+amount) || !curr1 || !to || !curr2) {
-      return ctx.reply('Please enter in format: /exchange x currency1 to currency2');
+    let [amount, curr, to, base] = ctx.state.command.splitArgs;
+    // Wrong format messages 
+    if (isNaN(+amount) || !curr || !to || !base) {
+      return ctx.reply('Please enter in format: "/exchange x currency1 to currency2"');
     }
     if (to.toUpperCase() !== 'TO') {
-      return ctx.reply('Please enter in format: /exchange x currency1 to currency2')
+      return ctx.reply('Please enter in format "/exchange x currency1 to currency2"')
     }
-    curr1 = curr1.toUpperCase();
-    curr2 = curr2.toUpperCase();
+    curr = curr.toUpperCase();
+    base = base.toUpperCase();
 
     const db = openDB();
-
+    
     let available = [null, null];
+    // Information about currencies availability and rates will be stored in this array 
     new Promise(resolve => {
-      db.get(`SELECT lastRequest FROM rates WHERE lastRequest != 0`, (err, row) => resolve(row))
+      // Last request timestamp search 
+      db.get(`
+      SELECT lastRequest 
+      FROM rates 
+      WHERE lastRequest != 0`, (err, row) => resolve(row))
     })
       .then((res) => {
         if (!res || (Date.now() - res.lastRequest > 6e5)) {
+          // If nothing was found or information are outdated, then make http request 
           return new Promise(resolve => {
             resolve(fetchRatesWithBaseUSD())
           })
@@ -123,23 +140,28 @@ module.exports = {
       })
       .then((serverData) => {
         if (serverData) {
+          // Server data handling 
           for (let [currency, rate] of Object.entries(serverData.rates)) {
-            if (currency === curr1) {
+            if (currency === curr) {
               available[0] = { currency, rate }
             }
-            if (currency === curr2) {
+            if (currency === base) {
               available[1] = { currency, rate }
             }
           }
           return available;
         } else {
+          // DB data handling 
           return new Promise(resolve => {
-            db.all(`SELECT currency, rate FROM rates WHERE currency IN ('${curr1}', '${curr2}')`, (err, row) => {
+            db.all(`SELECT currency, rate 
+            FROM rates 
+            WHERE currency 
+            IN ('${curr}', '${base}')`, (err, row) => {
               row.forEach((item) => {
-                if (item.currency === curr1) {
+                if (item.currency === curr) {
                   available[0] = item
                 }
-                if (item.currency === curr2) {
+                if (item.currency === base) {
                   available[1] = item
                 }
               })
@@ -151,33 +173,39 @@ module.exports = {
       .then(res => {
         closeDB(db);
         let errorMsg = '';
+        // User will get message if some currency is not available
         if (!res[0]) {
-          errorMsg += `${curr1} `;
+          errorMsg += `${curr} `;
         }
         if (!res[1]) {
-          errorMsg += `${curr2} `
+          errorMsg += `${base} `
         }
         if (errorMsg) {
           return ctx.reply(`Rates are not available for: ${errorMsg}`)
         } else {
           let result = (amount * res[1].rate / res[0].rate).toFixed(2);
-          return ctx.reply(`${amount} ${curr1} = ${result} ${curr2}`)
+          return ctx.reply(`${amount} ${curr} = ${result} ${base}`)
         }
       })
   },
 
   history: async (ctx) => {
     const chart = new QuickChart();
-    let [curr1, to, curr2] = ctx.state.command.splitArgs;
-    if (!curr2 || !to) {
-      curr2 = 'USD'
+    let [curr, to, base] = ctx.state.command.splitArgs;
+    if (!curr) {
+      // Wrong format message
+      return ctx.reply('Please, enter in format "/history currency1 to currency2"')
     }
-    curr1 = curr1.toUpperCase();
-    curr2 = curr2.toUpperCase();
+    if (!base || !to) {
+      // Use USD as the base currency, if base was not provided 
+      base = 'USD'
+    }
+    curr = curr.toUpperCase();
+    base = base.toUpperCase();
     const fromDate = new Date(Date.now() - 6.048e8).toISOString().replace(/T(.+)/, '');
     const toDate = new Date().toISOString().replace(/T(.+)/, '');
     const request = await fetch(`
-      https://api.exchangeratesapi.io/history?start_at=${fromDate}&end_at=${toDate}&base=${curr2}&symbols=${curr1}
+      https://api.exchangeratesapi.io/history?start_at=${fromDate}&end_at=${toDate}&base=${base}&symbols=${curr}
       `);
     const response = await request.json();
     if (response.error) {
@@ -185,7 +213,7 @@ module.exports = {
     } else {
       let responseArray = [];
       for (let key in response.rates) {
-        responseArray.push([key, response.rates[key][curr1]])
+        responseArray.push([key, response.rates[key][curr]])
       };
       let sortedData = responseArray.sort((a, b) => {
         return +a[0].slice(-2) - +b[0].slice(-2);
@@ -206,7 +234,7 @@ module.exports = {
           data: {
             labels,
             datasets: [{
-              label: `${curr1}`,
+              label: `${curr}`,
               data,
             }]
           },
@@ -219,7 +247,7 @@ module.exports = {
             },
             title: {
               display: true,
-              text: `Exchange rate for the last week relative to ${curr2}`,
+              text: `Exchange rate for the last week relative to ${base}`,
               fontSize: 20,
             },
             scales: {
@@ -246,9 +274,7 @@ module.exports = {
       new Promise(resolve => resolve(chart.getUrl()))
       .then(imgUrl => {
         return ctx.replyWithPhoto(imgUrl);
-
       })
-
     }
   }
 }
