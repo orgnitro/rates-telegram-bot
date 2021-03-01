@@ -1,7 +1,6 @@
 const fetch = require('node-fetch');
 const sqlite3 = require('sqlite3').verbose();
 const QuickChart = require('quickchart-js');
-let currentRates = {};
 
 async function fetchRatesWithBaseUSD() {
   const request = await fetch('https://api.exchangeratesapi.io/latest?base=USD');
@@ -190,7 +189,6 @@ module.exports = {
   },
 
   history: async (ctx) => {
-    const chart = new QuickChart();
     let [curr, to, base] = ctx.state.command.splitArgs;
     if (!curr) {
       // Wrong format message
@@ -209,12 +207,14 @@ module.exports = {
       `);
     const response = await request.json();
     if (response.error) {
+      // Error is shown if unavailable currency was used
       return ctx.reply(`Error: ${response.error}`);
     } else {
       let responseArray = [];
       for (let key in response.rates) {
         responseArray.push([key, response.rates[key][curr]])
       };
+      // Server data must be sorted by date before building graph
       let sortedData = responseArray.sort((a, b) => {
         return new Date(a[0]) - new Date(b[0]);
       });
@@ -228,8 +228,11 @@ module.exports = {
         }));
         data.push(value[1].toFixed(2));
       });
-      chart
-        .setConfig({
+
+      // If everything is OK and data is formatted, let's create a chart
+
+      const chart = new QuickChart();
+      chart.setConfig({
           type: 'line',
           data: {
             labels,
