@@ -54,7 +54,7 @@ function addToDatabase(data) {
 
 module.exports = {
   start: function(ctx) { 
-    ctx.reply('Hello. Here you can find actual exchange rates.\nMore details here /help') },
+    ctx.reply('Hello. How can I help You?\nAll commands are here: /help') },
 
   help: function(ctx) {
     ctx.reply(`Commands:\n
