@@ -10,17 +10,27 @@ async function fetchRatesWithBaseUSD() {
   return data;
 }
 
-// Database creation  
-
-function addToDatabase(data) {
+function openDB() {
   const db = new sqlite3.Database('./rates.db', (err) => {
     if (err) {
       return console.log(`Error occured while opening database ${err.message}`);
     }
-    console.log('Connected to the SQLite database');
-  });
+  })
+  console.log('db opened')
+  return db
+}
 
-  // Adding data from http request to the database
+function closeDB(db) {
+  db.close((err) => {
+    if (err) {
+      return console.log(`Error occured while closing database ${err.message}`);
+    }
+  })
+  console.log('db closed');
+}
+
+function addToDatabase(data) {
+  const db = openDB();
 
   let = stringifiedData = '';
   for (let [currency, rate] of Object.entries(data.rates)) {
@@ -36,24 +46,25 @@ function addToDatabase(data) {
     db.run(`INSERT INTO rates(lastRequest)
             VALUES (${Date.now()})`)
   });
-  db.close((err) => {
-    if (err) {
-      return console.log(`Error occured while closing database ${err.message}`);
-    }
-  });
+
+  closeDB(db);
 }
 
 // Commands 
 
 module.exports = {
-  start: (ctx) => { ctx.reply('Hello, how can I help You?') },
+  start: function(ctx) { 
+    ctx.reply('Hello. Here you can find actual exchange rates.\nMore details here /help') },
 
-  help: (ctx) => { ctx.reply('Help') },
+  help: function(ctx) {
+    ctx.reply(`Commands:\n
+    /list - Return list of all available currencies and rates. Data is updated every 10 minutes. For more frequent requests shows data from local database\n
+    /exchange - Convert money from one currency to another (example: "10 USD to CAD"). Data is updated every 10 minutes.\n
+    /history - Show graph with rates history for selected currency during last week (example: "/history CAD to EUR", or "/history RUB"). Rates are not available for weekend days.`)
+  },
 
-  list: (ctx) => {
-    const db = new sqlite3.Database('./rates.db', (err) => {
-      if (err) { return console.log(err.message) };
-    });
+  list: function(ctx) {
+    const db = openDB();
     new Promise((resolve) => {
       db.get(`SELECT lastRequest FROM rates WHERE lastRequest != 0`, (err, row) => resolve(row))
     })
@@ -81,18 +92,13 @@ module.exports = {
         }
       })
       .then(res => {
-        db.close()
+        closeDB(db);
         return ctx.reply(res);
       })
   },
 
-
-  exchange: (ctx) => {
-    const db = new sqlite3.Database('./rates.db', err => {
-      if (err) { console.log(err.message) };
-    });
-
-    let [amount, curr1, to, curr2] = ctx.state.command.splitArgs;
+  exchange: function(ctx) {
+    const [amount, curr1, to, curr2] = ctx.state.command.splitArgs;
     if (isNaN(+amount) || !curr1 || !to || !curr2) {
       return ctx.reply('Please enter in format: /exchange x currency1 to currency2');
     }
@@ -101,6 +107,8 @@ module.exports = {
     }
     curr1 = curr1.toUpperCase();
     curr2 = curr2.toUpperCase();
+
+    const db = openDB();
 
     let available = [null, null];
     new Promise(resolve => {
@@ -141,6 +149,7 @@ module.exports = {
         }
       })
       .then(res => {
+        closeDB(db);
         let errorMsg = '';
         if (!res[0]) {
           errorMsg += `${curr1} `;
@@ -159,75 +168,87 @@ module.exports = {
 
   history: async (ctx) => {
     const chart = new QuickChart();
-    let [currency] = ctx.state.command.splitArgs;
-    currency = currency.toUpperCase();
-    const date = new Date();
-    const from = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate() - 8}`;
-    const to = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-
-    const request = await fetch(`https://api.exchangeratesapi.io/history?start_at=${from}&end_at=${to}&base=USD&symbols=${currency}`);
+    let [curr1, to, curr2] = ctx.state.command.splitArgs;
+    if (!curr2 || !to) {
+      curr2 = 'USD'
+    }
+    curr1 = curr1.toUpperCase();
+    curr2 = curr2.toUpperCase();
+    const fromDate = new Date(Date.now() - 6.048e8).toISOString().replace(/T(.+)/, '');
+    const toDate = new Date().toISOString().replace(/T(.+)/, '');
+    const request = await fetch(`
+      https://api.exchangeratesapi.io/history?start_at=${fromDate}&end_at=${toDate}&base=${curr2}&symbols=${curr1}
+      `);
     const response = await request.json();
-    let responseArray = [];
-    for (let key in response.rates) {
-      responseArray.push([key, response.rates[key][currency].toFixed(2)])
-    };
-    let sortedData = responseArray.sort((a, b) => {
-      return +a[0].slice(-2) - +b[0].slice(-2);
-    });
+    if (response.error) {
+      return ctx.reply(`Error: ${response.error}`);
+    } else {
+      let responseArray = [];
+      for (let key in response.rates) {
+        responseArray.push([key, response.rates[key][curr1]])
+      };
+      let sortedData = responseArray.sort((a, b) => {
+        return +a[0].slice(-2) - +b[0].slice(-2);
+      });
 
-    let labels = [];
-    let data = [];
+      let labels = [];
+      let data = [];
 
-    sortedData.forEach(value => {
-      labels.push(value[0]);
-      data.push(value[1]);
-    });
-
-    chart
-      .setConfig({
-        type: 'line',
-        data: {
-          labels,
-          datasets: [{
-            label: `${currency}`,
-            data,
-          }]
-        },
-        options: {
-          legend: {
-            labels: {
-              fontSize: 10,
-              fontStyle: 'bold',
-            }
+      sortedData.forEach(value => {
+        labels.push(new Date(value[0]).toLocaleString('en-US', {
+          day: '2-digit', month: 'short'
+        }));
+        data.push(value[1].toFixed(2));
+      });
+      chart
+        .setConfig({
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              label: `${curr1}`,
+              data,
+            }]
           },
-          title: {
-            display: true,
-            text: 'Exchange rate for the last week relative to USD',
-            fontSize: 20,
-          },
-          scales: {
-            yAxes: [
-              {
-                ticks: {
-                  fontFamily: 'Mono',
+          options: {
+            legend: {
+              labels: {
+                fontSize: 10,
+                fontStyle: 'bold',
+              }
+            },
+            title: {
+              display: true,
+              text: `Exchange rate for the last week relative to ${curr2}`,
+              fontSize: 20,
+            },
+            scales: {
+              yAxes: [
+                {
+                  ticks: {
+                    fontFamily: 'Mono',
+                  },
                 },
-              },
-            ],
-            xAxes: [
-              {
-                ticks: {
-                  fontFamily: 'Sans-Serif',
+              ],
+              xAxes: [
+                {
+                  ticks: {
+                    fontFamily: 'Sans-Serif',
+                  },
                 },
-              },
-            ],
+              ],
+            },
           },
-        },
+        })
+        .setWidth(600)
+        .setHeight(300);
+
+      new Promise(resolve => resolve(chart.getUrl()))
+      .then(imgUrl => {
+        return ctx.replyWithPhoto(imgUrl);
+
       })
-      .setWidth(600)
-      .setHeight(300);
 
-    const imgUrl = await chart.getUrl();
-
-    return ctx.replyWithPhoto(imgUrl);
+    }
   }
 }
