@@ -56,6 +56,8 @@ db.close((err) => {
 
 bot.launch();
 
+app.get('/', (req, res) => res.send('The bot was started. Find @exchange_orgnitro_bot in Telegram'))
+
 app.listen(PORT, () => {
   console.log('Server started at port 3000');
 });
