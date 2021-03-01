@@ -4,12 +4,13 @@ if (process.env.NODE_ENV !== 'production') {
 
 const sqlite3 = require('sqlite3').verbose();
 const express = require('express');
-const { Telegraf } = require('telegraf');
+const { Composer } = require('micro-bot');
 const commands = require('./commands');
 const commandParts = require('./commandParts');
 const app = express();
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const bot = new Telegraf(BOT_TOKEN);
+const bot = new Composer;
+// const bot = new Telegraf(BOT_TOKEN);
 
 bot.use(commandParts);
 
@@ -49,9 +50,10 @@ db.close((err) => {
 
 // Server creation
 
-bot.launch();
+// bot.launch();
+module.exports = bot;
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
-  console.log('Server started at port 3000');
+  console.log(`Server started at port ${port}`);
 });
