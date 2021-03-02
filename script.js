@@ -6,9 +6,10 @@ const sqlite3 = require('sqlite3').verbose();
 const express = require('express');
 const { Telegraf } = require('telegraf');
 const commands = require('./commands');
+// commandParts module is used for splitting arguments in custom commands 
 const commandParts = require('./commandParts');
 const app = express();
-const BOT_TOKEN = process.env.BOT_TOKEN;
+const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const PORT = process.env.PORT || 3000;
 const URL = process.env.URL || 'https://rates-telegram-bot.herokuapp.com';
 const bot = new Telegraf(BOT_TOKEN);
@@ -56,8 +57,8 @@ db.close((err) => {
 
 bot.launch();
 
-app.get('/', (req, res) => res.send('The bot was started. Find @exchange_orgnitro_bot in Telegram'))
+app.get('/', (req, res) => res.send('The bot was started. Open https://t.me/exchange_orgnitro_bot or find @exchange_orgnitro_bot in Telegram'))
 
 app.listen(PORT, () => {
-  console.log('Server started at port 3000');
+  console.log(`Server started at port ${PORT}`);
 });
