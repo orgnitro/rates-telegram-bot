@@ -10,3 +10,7 @@ This telegram bot provides actual info about currency exchange rates using excha
 /exchange - Convert money from one currency to another (example: "10 USD to CAD"). Data is updated every 10 minutes.
 
 /history - Show graph with rates history for selected currency during last week (example: "/history CAD to EUR", or "/history RUB"). Rates are not available for weekend days.`)
+
+**Working hours:** <br><br>
+Due to my limited tariff plan on Heroku bot is available only within 9-18 Monday-Friday (GTM+2) <br>
+Thank you for understanding!
